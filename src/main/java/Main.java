@@ -42,9 +42,11 @@ public class Main {
 
         Fissando un tempo di esecuzione di 10 min si ottiene che 1 sec va simulato in 3 ms.
          */
-        double executionTime = 0.003;
+
+        //todo correggere
         //double executionTime = calcolaDurataEsecuzione(csvPath);
         //System.out.println("execution time: " + executionTime);
+        double executionTime = 0.003;
 
         try {
 
@@ -57,23 +59,24 @@ public class Main {
                     //System.out.println("line originale: " + line);
                     line = lineFilter(line, i);
                     //System.out.println("line filtrata: " + line);
-                    //if(i==5)
+                    if(i==2)
+                        exit(0);
 
                     Long newTimestamp = getTimestamp(line);
-                    System.out.println("actualTimestamp: " + actualTimestamp);
-                    System.out.println("newTimestamp: " + newTimestamp);
+                    //System.out.println("actualTimestamp: " + actualTimestamp);
+                    //System.out.println("newTimestamp: " + newTimestamp);
 
                     //la 1^ line letta avrà attesa nulla, le altre aspetteranno rispetto all'ultimo timestamp
                     if(i==1) {
                         actualTimestamp = newTimestamp;
                     }
                     int waitTime = calcolaDiffTimestamp(actualTimestamp, newTimestamp);
-                    System.out.println("vado in sleep per: " + waitTime);
-                    System.out.println(waitTime * executionTime);
+                    //System.out.println("vado in sleep per: " + waitTime);
+                    //System.out.println(waitTime * executionTime);
                     sleep((long) (waitTime*executionTime));
 
-                    //app.runProducer3(line, i, topic);
-                    System.out.println("invio line n° " + i);
+                    app.runProducer(line, i, topic);
+                    //System.out.println("invio line n° " + i);
 
                     actualTimestamp = newTimestamp;
                 }
@@ -119,7 +122,7 @@ public class Main {
         //System.out.println(firstTimestamp + " " + lastTimestamp);
 
         int timeInSec = calcolaDiffTimestamp(firstTimestamp, lastTimestamp);
-        System.out.println(timeInSec);
+        //System.out.println(timeInSec);
 
         //todo per eseguire in 10 min mettere 10*60=600 al numeratore
         double s = 600/timeInSec;
@@ -142,7 +145,7 @@ public class Main {
         /*
         System.out.println(firstDate);
         System.out.println(lastDate);
-*/
+        */
         Long diffTimestamp = lastTimestamp - firstTimestamp;
 
         Date diffDate = Date.from( Instant.ofEpochSecond(diffTimestamp));
@@ -162,7 +165,7 @@ public class Main {
      * @return
      */
     public static String lineFilter(String line, int index) {
-        System.out.println("index: " + index);
+        //System.out.println("index: " + index);
         String csvSplitBy = ",";
         int i, j;
 

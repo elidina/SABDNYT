@@ -7,7 +7,7 @@ import java.util.concurrent.ExecutionException;
 
 public class App {
 
-    public static void runProducer3(String row, int key, String topic){
+    public static void runProducer(String row, int key, String topic){
         Producer<String, String> producer = ProducerCreator.createProducer();
 
         try {
