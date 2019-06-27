@@ -59,7 +59,7 @@ public class Main {
                     //System.out.println("line originale: " + line);
                     line = lineFilter(line, i);
                     //System.out.println("line filtrata: " + line);
-                    if(i==2)
+                    if(i==10)
                         exit(0);
 
                     Long newTimestamp = getTimestamp(line);
@@ -75,7 +75,7 @@ public class Main {
                     //System.out.println(waitTime * executionTime);
                     sleep((long) (waitTime*executionTime));
 
-                    app.runProducer(line, i, topic);
+                    //app.runProducer(line, i, topic);
                     //System.out.println("invio line n° " + i);
 
                     actualTimestamp = newTimestamp;
@@ -194,15 +194,14 @@ public class Main {
                     j++;
             }
             //System.out.println("indice: " + i + " " + "valore: " + word[i]);
-            joiner = new StringJoiner(csvSplitBy);
-            for(i=12; i<j; ++i)
-                joiner.add(word[i]);
-            //System.out.println(joiner);
+            for(i=13; i<j; ++i) {
+                word[12] = word[12] + word[i];
+            }
 
             joiner = new StringJoiner(csvSplitBy);
-            for(i=j+1; i<word.length; ++i)
-                joiner.add(word[i]);
-            //System.out.println(joiner);
+            word[14] = word[j+1];
+            for(i=j+2; i<word.length; ++i)
+                word[14] = word[14] + word[i];
             //System.out.println("*******");
         }
 
@@ -210,7 +209,7 @@ public class Main {
         //System.out.println("line length: " + word.length);
 
         //ricreo la line con la sua struttura originale
-        for (i = 0; i < word.length; ++i) {
+        for (i = 0; i < 15; ++i) {
             //System.out.println(word[i]);
             joiner.add(word[i]);
         }
