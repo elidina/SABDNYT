@@ -23,7 +23,7 @@ public class Main {
 
         App app = new App();
 
-        String topic = "flink2";
+        String topic = "flink5";
 
         //todo prendere dataset dall'esterno del programma
         String csvPath = "dataset/Comments_jan-apr2018.csv";
@@ -57,9 +57,9 @@ public class Main {
                 //salto la 1^ riga di String
                 if(i>0) {
                     //System.out.println("line originale: " + line);
-                    line = lineFilter(line, i);
-                    System.out.println("line filtrata: " + line);
-                    if(i==10)
+                    //line = lineFilter(line, i);
+                    //System.out.println("line filtrata: " + line);
+                    if(i==1000)
                         exit(0);
 
                     Long newTimestamp = getTimestamp(line);

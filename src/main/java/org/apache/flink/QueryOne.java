@@ -17,10 +17,7 @@ import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.util.Collector;
 
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 /**
  * QUERY 1
@@ -40,30 +37,28 @@ public class QueryOne {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink2");
+        properties.setProperty("group.id", "flink4");
 
 
-        DataStream<ArticleObject> windowCounts = env.addSource(new FlinkKafkaConsumer<>("flink2", new SimpleStringSchema(), properties))
-                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<String>(Time.seconds(1)) {
-                    //assegno timestamp (createdate)
+        DataStream<ArticleObject> windowCounts = env.addSource(new FlinkKafkaConsumer<>("flink4", new CommentLogSchema(), properties))
+                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
-                    public long extractTimestamp(String s) {
-                        String[] entry = s.split(",");
-                        return Long.parseLong(entry[5]);
+                    public long extractTimestamp(CommentLog s) {
+                        //String[] entry = s.split(",");
+                        //return Long.parseLong(entry[5]);
+                        return s.createDate;
                     }
-                }).flatMap(new FlatMapFunction<String, ArticleObject>() {
+                }).filter(x -> x.userID != 0).flatMap(new FlatMapFunction<CommentLog, ArticleObject>() {
                     @Override
-                    //creazione oggetto ArticleObject che contiene articleID e contatore a 1
-                    public void flatMap(String s, Collector<ArticleObject> collector) throws Exception {
-                        String[] str = s.split(",");
+                    public void flatMap(CommentLog s, Collector<ArticleObject> collector) throws Exception {
+                        //String[] str = s.split(",");
 
-                        ArticleObject ao = new ArticleObject(str[1], 1,Long.parseLong(str[0]));
+                        ArticleObject ao = new ArticleObject(s.articleID, 1,s.createDate);
                         collector.collect(ao);
 
                     }
                 }).keyBy("article").timeWindow(Time.seconds(10), Time.seconds(5)).reduce(new ReduceFunction<ArticleObject>() {
                     @Override
-                    //somma dei count per articleid
                     public ArticleObject reduce(ArticleObject a1, ArticleObject a2) throws Exception {
                         return new ArticleObject(a1.article, a1.comment + a2.comment, Calendar.getInstance().getTimeInMillis());
                     }
@@ -71,13 +66,11 @@ public class QueryOne {
 
         DataStream<String> resultList = windowCounts.map(new MapFunction<ArticleObject, Tuple2<String, ArticleObject>>() {
             @Override
-            //map per cambiare chiave
             public Tuple2<String, ArticleObject> map(ArticleObject articleObject) throws Exception {
                 return new Tuple2<>("label", articleObject);
             }
         }).keyBy(0).timeWindow(Time.seconds(5)).apply(new WindowFunction<Tuple2<String, ArticleObject>, String, Tuple, TimeWindow>() {
             @Override
-            //classifica
             public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Tuple2<String, ArticleObject>> iterable, Collector<String> collector) throws Exception {
                 List<ArticleObject> myList = new ArrayList<>();
                 for(Tuple2<String, ArticleObject> t : iterable){
@@ -100,7 +93,7 @@ public class QueryOne {
                 }
 
                 Long time = timeWindow.getStart();
-                String finalRes = "Time: "+time+" \nFirst: "+one+" Second: "+two+" Third: "+three;
+                String finalRes = "Time: "+new Date(time*1000)+" \nFirst: "+one+" Second: "+two+" Third: "+three;
 
                 collector.collect(finalRes);
 
@@ -147,6 +140,7 @@ public class QueryOne {
         return best;
 
     }
+
 
 
 
