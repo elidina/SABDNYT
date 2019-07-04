@@ -25,7 +25,7 @@ import java.util.*;
 
 //TODO: gestione stato backend / finestre temporali diverse / importo dati kafkaconsumer
 
-public class QueryOne {
+public class QueryUno {
 
 
     public static void main(String[] args) throws Exception {
