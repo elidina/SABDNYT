@@ -10,8 +10,8 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
-import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.streaming.connectors.redis.RedisSink;
@@ -31,9 +31,6 @@ public class QueryTre {
 
     public static void main(String[] args) throws Exception {
 
-        final int DAILY_WINDOW_SIZE = 24;
-        final int WEEKLY_WINDOW_SIZE = DAILY_WINDOW_SIZE*7;
-        final int MONTHLY_WINDOW_SIZE = WEEKLY_WINDOW_SIZE*4;
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -42,7 +39,7 @@ public class QueryTre {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink5");
+        properties.setProperty("group.id", "flink");
 
         JedisPoolFactory.init("localhost", 6379);
 
@@ -54,7 +51,7 @@ public class QueryTre {
         jedis.close();
 */
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink5", new CommentLogSchema(), properties))
+        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentLogSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(CommentLog commentLog) {
@@ -97,7 +94,7 @@ public class QueryTre {
 
                         return new Tuple2<>(author,likes*0.3);
                     }
-                }).keyBy(0).timeWindow(Time.hours(DAILY_WINDOW_SIZE)).sum(1);
+                }).keyBy(0).timeWindow(Time.hours(24)).sum(1);
 
         /**
          * DEPTH 2
@@ -120,7 +117,7 @@ public class QueryTre {
             public Tuple2<String, Double> map(Tuple3<String, String, String> stringStringStringTuple3) throws Exception {
                 return new Tuple2<>(stringStringStringTuple3.f2,1*0.7);
             }
-        }).keyBy(0).timeWindow(Time.hours(DAILY_WINDOW_SIZE)).sum(1);
+        }).keyBy(0).timeWindow(Time.hours(24)).sum(1);
 
 
         /**
@@ -131,7 +128,7 @@ public class QueryTre {
         DataStream<Tuple2<String, Double>> commCountDepthThree = inputStream.filter(x -> x.depth == 3)
                 .flatMap(new MapFunctionDepth3())
                 .keyBy(0)
-                .timeWindow(Time.seconds(DAILY_WINDOW_SIZE))
+                .timeWindow(Time.hours(24))
                 .sum(1);
 
         /**
@@ -154,7 +151,7 @@ public class QueryTre {
          * ranking
          * top 10
          */
-        DataStream<String> resultRanking = windowResults.timeWindowAll(Time.hours(DAILY_WINDOW_SIZE))
+        DataStream<String> resultRanking = windowResults.timeWindowAll(Time.hours(24))
                 .apply(new AllWindowFunction<Tuple2<String, Double>, String, TimeWindow>() {
                     @Override
                     public void apply(TimeWindow timeWindow, Iterable<Tuple2<String, Double>> iterable, Collector<String> collector) throws Exception {

@@ -23,7 +23,7 @@ public class Main {
 
         App app = new App();
 
-        String topic = "flink5";
+        String topic = "flink";
 
         //todo prendere dataset dall'esterno del programma
         String csvPath = "dataset/Comments_jan-apr2018.csv";
