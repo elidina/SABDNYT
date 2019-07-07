@@ -194,16 +194,12 @@ public class QueryTre {
 
                         for (int i = 0; i < 10 && i < myList.size(); i++) {
 
-                            if(i >1){
-                                result = result + ", ";
-                            }
-
                             Tuple2<String,Double> max = getMaxTuple(myList);
                             myList.remove(max);
-                            result = "user id: " + max.f0 + " - ranking: "+ max.f1;
+                            result = result + ", user id: " + max.f0 + " - ranking: "+ max.f1;
                         }
 
-                        System.out.println("******** RANKING ********\n\n" + result);
+                        System.out.println(result+"\n\n");
 
                         collector.collect(result);
 
@@ -211,6 +207,7 @@ public class QueryTre {
                 });
 
         //resultRanking.print().setParallelism(1);
+
 
         resultRanking.writeAsText("outputquery3.txt", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         env.execute();

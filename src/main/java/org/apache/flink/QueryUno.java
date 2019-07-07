@@ -3,9 +3,11 @@ package org.apache.flink;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
+import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -30,25 +32,33 @@ public class QueryUno {
 
     public static void main(String[] args) throws Exception {
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
+
+        //StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+        env.setParallelism(8);
+        env.setRestartStrategy(RestartStrategies.noRestart());
+
+        env.setStateBackend(new RocksDBStateBackend("file:///tmp"));
 
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink4");
+        properties.setProperty("group.id", "flink3");
 
-
-        DataStream<ArticleObject> windowCounts = env.addSource(new FlinkKafkaConsumer<>("flink4", new CommentLogSchema(), properties))
+        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink3", new CommentLogSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
-                    public long extractTimestamp(CommentLog s) {
-                        //String[] entry = s.split(",");
-                        //return Long.parseLong(entry[5]);
-                        return s.createDate;
+                    public long extractTimestamp(CommentLog commentLog) {
+                        return commentLog.createDate*1000;
                     }
-                }).filter(x -> x.userID != 0).flatMap(new FlatMapFunction<CommentLog, ArticleObject>() {
+                }).filter(x -> x.userID != 0);
+
+
+        DataStream<ArticleObject> windowCounts = inputStream.flatMap(new FlatMapFunction<CommentLog, ArticleObject>() {
                     @Override
                     public void flatMap(CommentLog s, Collector<ArticleObject> collector) throws Exception {
                         //String[] str = s.split(",");
@@ -57,7 +67,7 @@ public class QueryUno {
                         collector.collect(ao);
 
                     }
-                }).keyBy("article").timeWindow(Time.seconds(10), Time.seconds(5)).reduce(new ReduceFunction<ArticleObject>() {
+                }).keyBy("article").timeWindow(Time.seconds(60*60)).reduce(new ReduceFunction<ArticleObject>() {
                     @Override
                     public ArticleObject reduce(ArticleObject a1, ArticleObject a2) throws Exception {
                         return new ArticleObject(a1.article, a1.comment + a2.comment, Calendar.getInstance().getTimeInMillis());
@@ -69,7 +79,7 @@ public class QueryUno {
             public Tuple2<String, ArticleObject> map(ArticleObject articleObject) throws Exception {
                 return new Tuple2<>("label", articleObject);
             }
-        }).keyBy(0).timeWindow(Time.seconds(5)).apply(new WindowFunction<Tuple2<String, ArticleObject>, String, Tuple, TimeWindow>() {
+        }).keyBy(0).timeWindow(Time.seconds(60*60)).apply(new WindowFunction<Tuple2<String, ArticleObject>, String, Tuple, TimeWindow>() {
             @Override
             public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Tuple2<String, ArticleObject>> iterable, Collector<String> collector) throws Exception {
                 List<ArticleObject> myList = new ArrayList<>();
@@ -93,7 +103,9 @@ public class QueryUno {
                 }
 
                 Long time = timeWindow.getStart();
-                String finalRes = "Time: "+new Date(time*1000)+" \nFirst: "+one+" Second: "+two+" Third: "+three;
+                String finalRes = "Time: "+new Date(time)+" \nFirst: "+one+" Second: "+two+" Third: "+three;
+
+                System.out.println(finalRes+"\n");
 
                 collector.collect(finalRes);
 

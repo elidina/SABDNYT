@@ -25,6 +25,13 @@ public class CommentLog {
     }
 
     public static CommentLog fromString(String s){
+        CommentLog cl = new CommentLog();
+
+        if(s.contains("https:") || s.contains("http:")){
+            cl.userID=0;
+            return cl;
+        }
+
         s = s.replace(",,",",null,");
         String[] attributes = s.split(",");
         int index = attributes.length;
@@ -37,7 +44,7 @@ public class CommentLog {
             attributes = Arrays.copyOfRange(attributes,1,index);
         }
 
-        CommentLog cl = new CommentLog();
+
         cl.approveDate = Long.parseLong(attributes[0]);
         cl.articleID = attributes[1];
         cl.articleWordCount = Integer.parseInt(attributes[2]);
@@ -53,31 +60,61 @@ public class CommentLog {
         }
 
         cl.inReplyTo = Integer.parseInt(attributes[8]);
-        cl.parentUserDisplayName = attributes[9];
-        cl.recommendations = Integer.parseInt(attributes[10]);
-        cl.sectionName = attributes[11];
 
-        int i = 0;
-        if(attributes[12].contains("\"")){
-            cl.userDisplayName = attributes[12] + attributes[13];
-            i=1;
+        int j = 0;
+        if(attributes[9].contains("\"")){
+            if(attributes[10].contains("\"")){
+                cl.parentUserDisplayName = attributes[9] + attributes[10];
+                j=1;
+            }else{
+                cl.parentUserDisplayName = attributes[9] + attributes[10] + attributes[11];
+                j=2;
+            }
         }else{
-            cl.userDisplayName = attributes[12];
+            cl.parentUserDisplayName = attributes[9];
         }
 
+
+
+        cl.recommendations = Integer.parseInt(attributes[10+j]);
+        cl.sectionName = attributes[11+j];
+
+        int i = 0;
+
+
+        if(attributes[12+j] != null){
+            if(attributes[12+j].contains("\"")){
+                if(attributes[13+j].contains("\"")){
+                    cl.userDisplayName = attributes[12+j] + attributes[13+j];
+                    i=1;
+                }
+                else{
+
+                    cl.userDisplayName = attributes[12+j] + attributes[13+j] + attributes[14+j];
+                    i=2;
+                }
+
+            }else{
+                cl.userDisplayName = attributes[12+j];
+            }
+
+        }else{
+            cl.userDisplayName = null;
+        }
+
+
         //errore amp
-        if(isNumeric(attributes[13+i])){
-            cl.userID = Integer.parseInt(attributes[13+i]);
+        if(isNumeric(attributes[13+i+j])){
+            cl.userID = Integer.parseInt(attributes[13+i+j]);
         }else{
             cl.userID = 0;
         }
 
 
-        if(attributes[14+i].contains("\"")){
-            cl.userLocation = attributes[14+i] + " - " + attributes[15+i];
-            i=1;
+        if(attributes[14+i+j].contains("\"")){
+            cl.userLocation = attributes[14+i+j] + " - " + attributes[15+i+j];
         }else{
-            cl.userLocation = attributes[14+i];
+            cl.userLocation = attributes[14+i+j];
         }
 
         return cl;
