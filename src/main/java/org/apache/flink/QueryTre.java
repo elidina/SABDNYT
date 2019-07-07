@@ -31,25 +31,30 @@ public class QueryTre {
 
     public static void main(String[] args) throws Exception {
 
+        final int DAILY_WINDOW_SIZE = 24;
+        final int WEEKLY_WINDOW_SIZE = DAILY_WINDOW_SIZE*7;
+        final int MONTHLY_WINDOW_SIZE = WEEKLY_WINDOW_SIZE*4;
+
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-        /*
-        StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
-        env.setParallelism(8);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        env.setStateBackend(new RocksDBStateBackend("file:///tmp"));
-        */
 
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink");
+        properties.setProperty("group.id", "flink5");
+
+        JedisPoolFactory.init("localhost", 6379);
 
         FlinkJedisPoolConfig conf = new FlinkJedisPoolConfig.Builder().setHost("localhost").build();
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentLogSchema(), properties))
+/*
+        Jedis jedis = new Jedis();
+        jedis.flushAll();
+        jedis.close();
+*/
+
+        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink5", new CommentLogSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(CommentLog commentLog) {
@@ -60,6 +65,7 @@ public class QueryTre {
         DataStream<CommentLog> originalComments = inputStream.filter(x -> x.depth == 1);
 
         /**
+         * SALVATAGGIO COMMENTI DEPTH 1 SU REDIS
          * output: tuple(id comment, id autore)
          * redis sink, string set
          * salvataggio su redis delle informazioni (id commento / id autore) dei commenti depth 1
@@ -69,8 +75,6 @@ public class QueryTre {
             public Tuple2<String, String> map(CommentLog commentLog) throws Exception {
                 //id commento , id user
                 Tuple2<String,String> commentAuthor = new Tuple2<>(Integer.toString(commentLog.commentID), Integer.toString(commentLog.userID));
-
-
                 return commentAuthor;
             }
         }).addSink( new RedisSink<>(conf, new RedisDepthOne()));
@@ -93,28 +97,14 @@ public class QueryTre {
 
                         return new Tuple2<>(author,likes*0.3);
                     }
-                }).keyBy(0).timeWindow(Time.seconds(30*60)).sum(1);
+                }).keyBy(0).timeWindow(Time.hours(DAILY_WINDOW_SIZE)).sum(1);
 
         /**
-         * steam depth 2
+         * DEPTH 2
          * output: tuple(id commento padre, id user padre, id user nonno
          * tuple pronte per essere salvate su redis
          */
-        DataStream<Tuple3<String,String,String>> twoStream = inputStream.filter(x -> x.depth == 2).flatMap(new FlatMapFunction<CommentLog, Tuple3<String, String, String>>() {
-            @Override
-            public void flatMap(CommentLog commentLog, Collector<Tuple3<String, String, String>> collector) throws Exception {
-                Jedis jedis = new Jedis();
-                String value = jedis.get(Integer.toString(commentLog.inReplyTo));
-
-                if(value != null){
-                    //id commento padre, id user padre, id autore nonno
-                    Tuple3<String,String,String> t = new Tuple3<>(Integer.toString(commentLog.commentID), Integer.toString(commentLog.userID), value);
-
-                    collector.collect(t);
-                }
-
-            }
-        });
+        DataStream<Tuple3<String,String,String>> twoStream = inputStream.filter(x -> x.depth == 2).flatMap(new MapFunctionDepth2());
 
         /**
          * salvataggio su redis delle tuple depth 2
@@ -130,35 +120,19 @@ public class QueryTre {
             public Tuple2<String, Double> map(Tuple3<String, String, String> stringStringStringTuple3) throws Exception {
                 return new Tuple2<>(stringStringStringTuple3.f2,1*0.7);
             }
-        }).keyBy(0).timeWindow(Time.seconds(30*60)).sum(1);
+        }).keyBy(0).timeWindow(Time.hours(DAILY_WINDOW_SIZE)).sum(1);
 
 
         /**
+         * DEPTH 3
          * output: tuple(autore,count comm)
          * calcola le tuple autore/count per i commenti di depth 3
          */
-        DataStream<Tuple2<String, Double>> commCountDepthThree = inputStream.filter(x -> x.depth == 3).flatMap(new FlatMapFunction<CommentLog, Tuple2<String, Double>>() {
-            @Override
-            public void flatMap(CommentLog commentLog, Collector<Tuple2<String, Double>> collector) throws Exception {
-                String commentoPadre = Integer.toString(commentLog.inReplyTo);
-                Jedis jedisThree = new Jedis();
-                String[] values = jedisThree.get(commentoPadre).split("_");
-
-                if(values[0] != null){
-                    Tuple2<String, Double> t1 = new Tuple2<>(values[0],1*0.7);
-                    collector.collect(t1);
-
-                }
-                if(values[1] != null){
-                    Tuple2<String, Double> t2 = new Tuple2<>(values[1],1*0.7);
-                    collector.collect(t2);
-
-
-                }
-
-
-            }
-        }).keyBy(0).timeWindow(Time.seconds(30*60)).sum(1);
+        DataStream<Tuple2<String, Double>> commCountDepthThree = inputStream.filter(x -> x.depth == 3)
+                .flatMap(new MapFunctionDepth3())
+                .keyBy(0)
+                .timeWindow(Time.seconds(DAILY_WINDOW_SIZE))
+                .sum(1);
 
         /**
          * output: tuple(autore/count comm totale * peso)
@@ -180,7 +154,7 @@ public class QueryTre {
          * ranking
          * top 10
          */
-        DataStream<String> resultRanking = windowResults.timeWindowAll(Time.seconds(30*60))
+        DataStream<String> resultRanking = windowResults.timeWindowAll(Time.hours(DAILY_WINDOW_SIZE))
                 .apply(new AllWindowFunction<Tuple2<String, Double>, String, TimeWindow>() {
                     @Override
                     public void apply(TimeWindow timeWindow, Iterable<Tuple2<String, Double>> iterable, Collector<String> collector) throws Exception {
@@ -207,7 +181,6 @@ public class QueryTre {
                 });
 
         //resultRanking.print().setParallelism(1);
-
 
         resultRanking.writeAsText("outputquery3.txt", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         env.execute();
