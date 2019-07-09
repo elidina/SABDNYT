@@ -47,11 +47,36 @@ public class CommentLog {
 
         cl.approveDate = Long.parseLong(attributes[0]);
         cl.articleID = attributes[1];
-        cl.articleWordCount = Integer.parseInt(attributes[2]);
-        cl.commentID = Integer.parseInt(attributes[3]);
+
+        try{
+            cl.articleWordCount = Integer.parseInt(attributes[2]);
+        }catch(Exception e){
+            cl.userID = 0;
+            return cl;
+        }
+
+        try{
+            cl.commentID = Integer.parseInt(attributes[3]);
+        }catch(Exception e){
+            cl.userID = 0;
+            return cl;
+        }
+
         cl.commentType = attributes[4];
-        cl.createDate = Long.parseLong(attributes[5]);
-        cl.depth = Integer.parseInt(attributes[6]);
+
+        try{
+            cl.createDate = Long.parseLong(attributes[5]);
+        }catch(Exception e){
+            cl.userID = 0;
+            return cl;
+        }
+
+        try{
+            cl.depth = Integer.parseInt(attributes[6]);
+        }catch(Exception e){
+            cl.userID = 0;
+            return cl;
+        }
 
         if(attributes[7].equals("False")){
             cl.editorsSelection = false;
@@ -59,7 +84,12 @@ public class CommentLog {
             cl.editorsSelection = true;
         }
 
-        cl.inReplyTo = Integer.parseInt(attributes[8]);
+        try{
+            cl.inReplyTo = Integer.parseInt(attributes[8]);
+        }catch(Exception e){
+            cl.userID = 0;
+            return cl;
+        }
 
         int j = 0;
         if(attributes[9].contains("\"")){
@@ -74,9 +104,13 @@ public class CommentLog {
             cl.parentUserDisplayName = attributes[9];
         }
 
+        try{
+            cl.recommendations = Integer.parseInt(attributes[10+j]);
+        }catch(Exception e){
+            cl.userID = 0;
+            return cl;
+        }
 
-
-        cl.recommendations = Integer.parseInt(attributes[10+j]);
         cl.sectionName = attributes[11+j];
 
         int i = 0;
@@ -102,12 +136,11 @@ public class CommentLog {
             cl.userDisplayName = null;
         }
 
-
-        //errore amp
-        if(isNumeric(attributes[13+i+j])){
+        try{
             cl.userID = Integer.parseInt(attributes[13+i+j]);
-        }else{
+        }catch(Exception e){
             cl.userID = 0;
+            return cl;
         }
 
 

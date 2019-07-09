@@ -4,7 +4,6 @@ import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
-import org.apache.flink.api.common.serialization.SimpleStringSchema;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
@@ -32,13 +31,17 @@ public class QueryUno {
 
     public static void main(String[] args) throws Exception {
 
-        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
+        final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
-        final int DAILY_WINDOW_SIZE = 60*60*24;
-        final int WEEKLY_WINDOW_SIZE = DAILY_WINDOW_SIZE*7;
-        final int MONTHLY_WINDOW_SIZE = WEEKLY_WINDOW_SIZE*4;
+        final int daily_Window_size = 24;
+        final int weekly_Window_size = 24*7;
+        final int hourly_Window_size = 1;
 
-        final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
+        final int window_dimension = hourly_Window_size;
+
+        String file_path = "query1_output_"+window_dimension+".txt";
+
+        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
@@ -53,7 +56,9 @@ public class QueryUno {
         properties.setProperty("zookeeper.connect", "localhost:2181");
         properties.setProperty("group.id", "flink");
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentLogSchema(), properties))
+        env.getConfig().setLatencyTrackingInterval(2000);
+
+        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(CommentLog commentLog) {
@@ -68,10 +73,11 @@ public class QueryUno {
                         //String[] str = s.split(",");
 
                         ArticleObject ao = new ArticleObject(s.articleID, 1,s.createDate);
+                        System.out.println(ao);
                         collector.collect(ao);
 
                     }
-                }).keyBy("article").timeWindow(Time.hours(24)).reduce(new ReduceFunction<ArticleObject>() {
+                }).keyBy("article").timeWindow(Time.hours(window_dimension)).reduce(new ReduceFunction<ArticleObject>() {
                     @Override
                     public ArticleObject reduce(ArticleObject a1, ArticleObject a2) throws Exception {
                         return new ArticleObject(a1.article, a1.comment + a2.comment, Calendar.getInstance().getTimeInMillis());
@@ -83,7 +89,7 @@ public class QueryUno {
             public Tuple2<String, ArticleObject> map(ArticleObject articleObject) throws Exception {
                 return new Tuple2<>("label", articleObject);
             }
-        }).keyBy(0).timeWindow(Time.hours(24)).apply(new WindowFunction<Tuple2<String, ArticleObject>, String, Tuple, TimeWindow>() {
+        }).keyBy(0).timeWindow(Time.hours(window_dimension)).apply(new WindowFunction<Tuple2<String, ArticleObject>, String, Tuple, TimeWindow>() {
             @Override
             public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Tuple2<String, ArticleObject>> iterable, Collector<String> collector) throws Exception {
                 List<ArticleObject> myList = new ArrayList<>();
@@ -91,25 +97,17 @@ public class QueryUno {
                     myList.add(t.f1);
                 }
 
-                String one = "";
-                String two = "";
-                String three = "";
-
-                List<ArticleObject> results = getTop3Articles(myList);
-                if(results.get(0) != null){
-                    one= results.get(0).toString();
-                }
-                if(results.get(1) != null){
-                    two= results.get(1).toString();
-                }
-                if(results.get(2) != null){
-                    three= results.get(2).toString();
-                }
-
                 Long time = timeWindow.getStart();
-                String finalRes = "Time: "+new Date(time)+" \nFirst: "+one+" Second: "+two+" Third: "+three;
+                String finalRes = new Date(time)+"";
 
-                System.out.println(finalRes+"\n");
+                for (int i = 0; i < 3 && i < myList.size() ; i++) {
+                    finalRes = finalRes + ", ";
+                    ArticleObject ao = getMaxArticle(myList);
+                    myList.remove(ao);
+                    finalRes = finalRes + ao.article + ", "+ao.comment;
+                }
+
+                System.out.println(finalRes);
 
                 collector.collect(finalRes);
 
@@ -118,9 +116,25 @@ public class QueryUno {
 
         //resultList.print().setParallelism(1);
 
-        resultList.writeAsText("query1output.txt", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        resultList.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         env.execute("Query1");
+    }
+
+    private static ArticleObject getMaxArticle(List<ArticleObject> myList) {
+
+        ArticleObject maxArticle = null;
+        Integer max = 0;
+
+        for (ArticleObject t : myList) {
+            if(t.comment > max){
+                max = t.comment;
+                maxArticle = t;
+            }
+        }
+
+        return maxArticle;
+
     }
 
 

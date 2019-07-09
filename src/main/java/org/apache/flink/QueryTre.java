@@ -1,6 +1,5 @@
 package org.apache.flink;
 
-import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
@@ -10,7 +9,6 @@ import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
-import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
@@ -20,7 +18,7 @@ import org.apache.flink.streaming.connectors.redis.common.mapper.RedisCommand;
 import org.apache.flink.streaming.connectors.redis.common.mapper.RedisCommandDescription;
 import org.apache.flink.streaming.connectors.redis.common.mapper.RedisMapper;
 import org.apache.flink.util.Collector;
-import redis.clients.jedis.Jedis;
+import org.apache.flink.streaming.api.windowing.time.Time;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -30,6 +28,14 @@ import java.util.Properties;
 public class QueryTre {
 
     public static void main(String[] args) throws Exception {
+
+        final int daily_Window_size = 24;
+        final int weekly_Window_size = 24*7;
+        final int monthly_Window_size = 24*30;
+
+        final int window_dimension = daily_Window_size;
+
+        String file_path = "query2_output_"+window_dimension+".txt";
 
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
@@ -51,7 +57,7 @@ public class QueryTre {
         jedis.close();
 */
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentLogSchema(), properties))
+        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(CommentLog commentLog) {
@@ -179,7 +185,7 @@ public class QueryTre {
 
         //resultRanking.print().setParallelism(1);
 
-        resultRanking.writeAsText("outputquery3.txt", FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        resultRanking.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         env.execute();
 
 

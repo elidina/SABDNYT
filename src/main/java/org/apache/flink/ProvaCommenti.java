@@ -30,9 +30,9 @@ public class ProvaCommenti {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink3");
+        properties.setProperty("group.id", "flink");
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink3", new CommentLogSchema(), properties))
+        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(CommentLog commentLog) {

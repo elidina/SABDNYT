@@ -56,15 +56,10 @@ public class Main {
 
                 //salto la 1^ riga di String
                 if(i>0) {
-                    //System.out.println("line originale: " + line);
-                    //line = lineFilter(line, i);
-                    //System.out.println("line filtrata: " + line);
                     /*
                     if(i==1500)
                         exit(0);
 */
-                    if(i==10000)
-                        exit(0);
 
                     Long newTimestamp = getTimestamp(line);
                     //System.out.println("actualTimestamp: " + actualTimestamp);
@@ -77,7 +72,7 @@ public class Main {
                     int waitTime = calcolaDiffTimestamp(actualTimestamp, newTimestamp);
                     //System.out.println("vado in sleep per: " + waitTime);
                     //System.out.println(waitTime * executionTime);
-                    sleep((long) (waitTime*executionTime));
+                    //sleep((long) (waitTime*executionTime));
 
                     app.runProducer(line, i, topic);
                     //System.out.println("invio line n° " + i);
@@ -177,10 +172,6 @@ public class Main {
 
         String[] word = line.split(csvSplitBy); //divido la line in parole
 
-        //per tutti i commenti:
-        //- sostituisco word[9] con "null" nel caso in cui word[9] = null perchè risulta vuota
-        //- aggrego eventuali info multiple del campo UserDisplayName in word[10]
-        //- aggrego le varie info sulla località in un solo elemento
         if(index>0) {
             //if(index==278)
             //    exit(0);

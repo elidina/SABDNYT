@@ -33,7 +33,7 @@ public class App {
             producer.send(
                     new ProducerRecord<String, String>(topic, key, value))
                     .get();
-            System.out.println("Sent message: (" + key + ", " + value + ")");
+            //System.out.println("Sent message: (" + key + ", " + value + ")");
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (ExecutionException e) {

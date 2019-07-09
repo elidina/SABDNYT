@@ -7,7 +7,7 @@ import org.apache.flink.api.java.typeutils.TypeExtractor;
 
 import java.io.IOException;
 
-public class CommentLogSchema implements DeserializationSchema<CommentLog>, SerializationSchema<CommentLog> {
+public class CommentSchema implements DeserializationSchema<CommentLog>, SerializationSchema<CommentLog> {
     @Override
     public CommentLog deserialize(byte[] bytes) throws IOException {
         return CommentLog.fromString(new String(bytes));
