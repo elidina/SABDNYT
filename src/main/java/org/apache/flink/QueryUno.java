@@ -3,10 +3,8 @@ package org.apache.flink;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.api.java.tuple.Tuple;
 import org.apache.flink.api.java.tuple.Tuple2;
-import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
@@ -29,7 +27,7 @@ import java.util.*;
 public class QueryUno {
 
 
-    public static void main(String[] args) throws Exception {
+    public static void query1() throws Exception {
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -45,11 +43,13 @@ public class QueryUno {
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
+
         //StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
-        env.setParallelism(8);
+      /*  env.setParallelism(8);
         env.setRestartStrategy(RestartStrategies.noRestart());
 
         env.setStateBackend(new RocksDBStateBackend("file:///tmp"));
+        */
 
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
@@ -58,18 +58,18 @@ public class QueryUno {
 
         env.getConfig().setLatencyTrackingInterval(2000);
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
-                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
+        DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
+                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
                     @Override
-                    public long extractTimestamp(CommentLog commentLog) {
-                        return commentLog.createDate*1000;
+                    public long extractTimestamp(Comment comment) {
+                        return comment.createDate*1000;
                     }
                 }).filter(x -> x.userID != 0);
 
 
-        DataStream<ArticleObject> windowCounts = inputStream.flatMap(new FlatMapFunction<CommentLog, ArticleObject>() {
+        DataStream<ArticleObject> windowCounts = inputStream.flatMap(new FlatMapFunction<Comment, ArticleObject>() {
                     @Override
-                    public void flatMap(CommentLog s, Collector<ArticleObject> collector) throws Exception {
+                    public void flatMap(Comment s, Collector<ArticleObject> collector) throws Exception {
                         //String[] str = s.split(",");
 
                         ArticleObject ao = new ArticleObject(s.articleID, 1,s.createDate);

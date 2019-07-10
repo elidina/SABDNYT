@@ -17,13 +17,10 @@ import org.apache.flink.streaming.connectors.redis.common.config.FlinkJedisPoolC
 import org.apache.flink.streaming.connectors.redis.common.mapper.RedisCommand;
 import org.apache.flink.streaming.connectors.redis.common.mapper.RedisCommandDescription;
 import org.apache.flink.streaming.connectors.redis.common.mapper.RedisMapper;
-import org.apache.flink.util.Collector;
 import org.apache.flink.streaming.api.windowing.time.Time;
+import org.apache.flink.util.Collector;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 public class QueryTre {
 
@@ -35,8 +32,7 @@ public class QueryTre {
 
         final int window_dimension = daily_Window_size;
 
-        String file_path = "query2_output_"+window_dimension+".txt";
-
+        String file_path = "query3_output_"+window_dimension+".txt";
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -51,21 +47,17 @@ public class QueryTre {
 
         FlinkJedisPoolConfig conf = new FlinkJedisPoolConfig.Builder().setHost("localhost").build();
 
-/*
-        Jedis jedis = new Jedis();
-        jedis.flushAll();
-        jedis.close();
-*/
-
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
-                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
+        DataStream<Comment> stream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
+                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
                     @Override
-                    public long extractTimestamp(CommentLog commentLog) {
-                        return commentLog.createDate*1000;
+                    public long extractTimestamp(Comment comment) {
+                        return comment.createDate*1000;
                     }
-                }).filter(x -> x.userID != 0);
+                });
 
-        DataStream<CommentLog> originalComments = inputStream.filter(x -> x.depth == 1);
+        DataStream<Comment> inputStream = stream.filter(x -> x.userID != 0);
+
+        DataStream<Comment> originalComments = inputStream.filter(x -> x.depth == 1);
 
         /**
          * SALVATAGGIO COMMENTI DEPTH 1 SU REDIS
@@ -73,34 +65,34 @@ public class QueryTre {
          * redis sink, string set
          * salvataggio su redis delle informazioni (id commento / id autore) dei commenti depth 1
          */
-        DataStreamSink<Tuple2<String, String>> commentAuthor = originalComments.map(new MapFunction<CommentLog, Tuple2<String, String>>() {
+        DataStreamSink<Tuple2<String, String>> commentAuthor = originalComments.map(new MapFunction<Comment, Tuple2<String, String>>() {
             @Override
-            public Tuple2<String, String> map(CommentLog commentLog) throws Exception {
+            public Tuple2<String, String> map(Comment comment) throws Exception {
                 //id commento , id user
-                Tuple2<String,String> commentAuthor = new Tuple2<>(Integer.toString(commentLog.commentID), Integer.toString(commentLog.userID));
-                return commentAuthor;
+                return new Tuple2<>(Integer.toString(comment.commentID), Integer.toString(comment.userID));
             }
         }).addSink( new RedisSink<>(conf, new RedisDepthOne()));
 
         /**
+         * depth1
          * output: (autore, likes)
          * estraggo i like per ciascun commento
          */
         DataStream<Tuple2<String,Double>> directCommentsLikes = originalComments
-                .map(new MapFunction<CommentLog, Tuple2<String, Double>>() {
+                .map(new MapFunction<Comment, Tuple2<String, Double>>() {
                     @Override
-                    public Tuple2<String, Double> map(CommentLog commentLog) {
+                    public Tuple2<String, Double> map(Comment comment) {
 
-                        String author = Integer.toString(commentLog.userID);
-                        Double likes = new Double(commentLog.recommendations);
-                        if(commentLog.editorsSelection){
+                        String author = Integer.toString(comment.userID);
+                        Double likes = new Double(comment.recommendations);
+                        if(comment.editorsSelection){
                             int increment = (int) (likes*0.1);
                             likes += increment;
                         }
 
                         return new Tuple2<>(author,likes*0.3);
                     }
-                }).keyBy(0).timeWindow(Time.hours(24)).sum(1);
+                }).keyBy(0).timeWindow(Time.hours(window_dimension)).sum(1);
 
         /**
          * DEPTH 2
@@ -123,8 +115,7 @@ public class QueryTre {
             public Tuple2<String, Double> map(Tuple3<String, String, String> stringStringStringTuple3) throws Exception {
                 return new Tuple2<>(stringStringStringTuple3.f2,1*0.7);
             }
-        }).keyBy(0).timeWindow(Time.hours(24)).sum(1);
-
+        }).keyBy(0).timeWindow(Time.hours(window_dimension)).sum(1);
 
         /**
          * DEPTH 3
@@ -134,8 +125,9 @@ public class QueryTre {
         DataStream<Tuple2<String, Double>> commCountDepthThree = inputStream.filter(x -> x.depth == 3)
                 .flatMap(new MapFunctionDepth3())
                 .keyBy(0)
-                .timeWindow(Time.hours(24))
+                .timeWindow(Time.hours(window_dimension))
                 .sum(1);
+
 
         /**
          * output: tuple(autore/count comm totale * peso)
@@ -144,7 +136,6 @@ public class QueryTre {
         DataStream<Tuple2<String, Double>> joinDepthTwoThree = commCountDepthTwo.union(commCountDepthThree)
                 .keyBy(0)
                 .sum(1);
-
         /**
          * output: tuple(autore/rank)
          * somma dei rank per commenti e like per ciascun user
@@ -157,7 +148,7 @@ public class QueryTre {
          * ranking
          * top 10
          */
-        DataStream<String> resultRanking = windowResults.timeWindowAll(Time.hours(24))
+        DataStream<String> resultRanking = windowResults.timeWindowAll(Time.hours(window_dimension))
                 .apply(new AllWindowFunction<Tuple2<String, Double>, String, TimeWindow>() {
                     @Override
                     public void apply(TimeWindow timeWindow, Iterable<Tuple2<String, Double>> iterable, Collector<String> collector) throws Exception {
@@ -167,23 +158,27 @@ public class QueryTre {
                             myList.add(t);
                         }
 
-                        String result = "" + new Date(timeWindow.getStart()) +": ";
+                        Collections.sort(myList, new Comparator<Tuple2<String, Double>>() {
+                            @Override
+                            public int compare(Tuple2<String, Double> o1, Tuple2<String, Double> o2) {
+                                int first = (int) (o1.f1 * 1000);
+                                int second = (int) (o2.f1 * 1000);
+                                return first - second;
+                            }
+                        });
+
+                        String result = "" + new Date(timeWindow.getStart()) +"";
 
                         for (int i = 0; i < 10 && i < myList.size(); i++) {
-
-                            Tuple2<String,Double> max = getMaxTuple(myList);
-                            myList.remove(max);
-                            result = result + ", user id: " + max.f0 + " - ranking: "+ max.f1;
+                            result += ", "+ myList.get(i).f0 +", "+myList.get(i).f1;
                         }
 
-                        System.out.println(result+"\n\n");
+                        //System.out.println(result);
 
                         collector.collect(result);
 
                     }
                 });
-
-        //resultRanking.print().setParallelism(1);
 
         resultRanking.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         env.execute();
@@ -191,21 +186,6 @@ public class QueryTre {
 
     }
 
-    private static Tuple2<String,Double> getMaxTuple(List<Tuple2<String, Double>> myList) {
-
-        Tuple2<String,Double> maxTuple = null;
-        Double max = 0.0;
-
-        for (Tuple2<String,Double> t : myList) {
-            if(t.f1 > max){
-                max = t.f1;
-                maxTuple = t;
-            }
-        }
-
-        return maxTuple;
-
-    }
 
     public static class RedisDepthTwo implements RedisMapper<Tuple3<String,String,String>>{
 

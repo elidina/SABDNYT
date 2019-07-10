@@ -56,10 +56,10 @@ public class Main {
 
                 //salto la 1^ riga di String
                 if(i>0) {
-                    /*
+
                     if(i==1500)
                         exit(0);
-*/
+
 
                     Long newTimestamp = getTimestamp(line);
                     //System.out.println("actualTimestamp: " + actualTimestamp);

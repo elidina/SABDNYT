@@ -1,5 +1,6 @@
 package org.apache.flink;
 
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -32,15 +33,19 @@ public class ProvaCommenti {
         properties.setProperty("zookeeper.connect", "localhost:2181");
         properties.setProperty("group.id", "flink");
 
-        DataStream<CommentLog> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
-                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<CommentLog>(Time.seconds(1)) {
+        DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
+                .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
                     @Override
-                    public long extractTimestamp(CommentLog commentLog) {
+                    public long extractTimestamp(Comment commentLog) {
                         return commentLog.createDate * 1000;
                     }
-                }).filter(x -> x.userID != 0);
+                });
 
-        inputStream.print().setParallelism(1);
+        DataStream<Comment> not_filtered = inputStream.filter(x -> x.userID == 0);
+        not_filtered.print().setParallelism(1);
+        //not_filtered.map( x -> x.error).print().setParallelism(1);
+
+
 
         env.execute();
     }

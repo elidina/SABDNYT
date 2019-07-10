@@ -2,7 +2,7 @@ package org.apache.flink;
 
 import java.util.Arrays;
 
-public class CommentLog {
+public class Comment {
 
     public long approveDate;
     public String articleID;
@@ -19,15 +19,17 @@ public class CommentLog {
     public String userDisplayName;
     public int userID;
     public String userLocation;
+    public String error;
 
-    public CommentLog(){
+    public Comment(){
 
     }
 
-    public static CommentLog fromString(String s){
-        CommentLog cl = new CommentLog();
+    public static Comment fromString(String s){
+        Comment cl = new Comment();
 
         if(s.contains("https:") || s.contains("http:")){
+            cl.error = "http";
             cl.userID=0;
             return cl;
         }
@@ -37,6 +39,8 @@ public class CommentLog {
         int index = attributes.length;
 
         if(index < 14){
+            cl.error = "invalid record";
+
             throw new RuntimeException( "Invalid record: " + s );
         }
 
@@ -51,6 +55,8 @@ public class CommentLog {
         try{
             cl.articleWordCount = Integer.parseInt(attributes[2]);
         }catch(Exception e){
+            cl.error = "word count";
+
             cl.userID = 0;
             return cl;
         }
@@ -58,6 +64,8 @@ public class CommentLog {
         try{
             cl.commentID = Integer.parseInt(attributes[3]);
         }catch(Exception e){
+            cl.error = "commentid";
+
             cl.userID = 0;
             return cl;
         }
@@ -67,6 +75,8 @@ public class CommentLog {
         try{
             cl.createDate = Long.parseLong(attributes[5]);
         }catch(Exception e){
+            cl.error = "createdate";
+
             cl.userID = 0;
             return cl;
         }
@@ -74,6 +84,8 @@ public class CommentLog {
         try{
             cl.depth = Integer.parseInt(attributes[6]);
         }catch(Exception e){
+            cl.error = "depth";
+
             cl.userID = 0;
             return cl;
         }
@@ -87,6 +99,8 @@ public class CommentLog {
         try{
             cl.inReplyTo = Integer.parseInt(attributes[8]);
         }catch(Exception e){
+            cl.error = "inreplyto";
+
             cl.userID = 0;
             return cl;
         }
@@ -107,6 +121,8 @@ public class CommentLog {
         try{
             cl.recommendations = Integer.parseInt(attributes[10+j]);
         }catch(Exception e){
+            cl.error = "recs";
+
             cl.userID = 0;
             return cl;
         }
@@ -114,7 +130,6 @@ public class CommentLog {
         cl.sectionName = attributes[11+j];
 
         int i = 0;
-
 
         if(attributes[12+j] != null){
             if(attributes[12+j].contains("\"")){
@@ -139,6 +154,8 @@ public class CommentLog {
         try{
             cl.userID = Integer.parseInt(attributes[13+i+j]);
         }catch(Exception e){
+            cl.error = "userid: "+attributes[13+i+j];
+
             cl.userID = 0;
             return cl;
         }
@@ -155,7 +172,7 @@ public class CommentLog {
 
     @Override
     public String toString() {
-        return "CommentLog{" +
+        return "Comment{" +
                 "approveDate=" + approveDate +
                 ", articleID='" + articleID + '\'' +
                 ", articleWordCount=" + articleWordCount +
@@ -171,6 +188,7 @@ public class CommentLog {
                 ", userDisplayName='" + userDisplayName + '\'' +
                 ", userID=" + userID +
                 ", userLocation='" + userLocation + '\'' +
+                ", ERROR='" + error + '\'' +
                 '}';
     }
 

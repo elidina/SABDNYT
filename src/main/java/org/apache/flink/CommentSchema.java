@@ -7,24 +7,24 @@ import org.apache.flink.api.java.typeutils.TypeExtractor;
 
 import java.io.IOException;
 
-public class CommentSchema implements DeserializationSchema<CommentLog>, SerializationSchema<CommentLog> {
+public class CommentSchema implements DeserializationSchema<Comment>, SerializationSchema<Comment> {
     @Override
-    public CommentLog deserialize(byte[] bytes) throws IOException {
-        return CommentLog.fromString(new String(bytes));
+    public Comment deserialize(byte[] bytes) throws IOException {
+        return Comment.fromString(new String(bytes));
     }
 
     @Override
-    public boolean isEndOfStream(CommentLog commentLog) {
+    public boolean isEndOfStream(Comment commentLog) {
         return false;
     }
 
     @Override
-    public byte[] serialize(CommentLog commentLog) {
+    public byte[] serialize(Comment commentLog) {
         return commentLog.toString().getBytes();
     }
 
     @Override
-    public TypeInformation<CommentLog> getProducedType() {
-        return TypeExtractor.getForClass(CommentLog.class);
+    public TypeInformation<Comment> getProducedType() {
+        return TypeExtractor.getForClass(Comment.class);
     }
 }
