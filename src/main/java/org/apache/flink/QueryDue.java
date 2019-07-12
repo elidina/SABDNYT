@@ -2,6 +2,7 @@ package org.apache.flink;
 
 import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.entities.Comment;
 import org.apache.flink.entities.CommentSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
@@ -17,9 +18,7 @@ import org.apache.flink.streaming.api.windowing.windows.GlobalWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
 import org.apache.flink.util.Collector;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 import static org.apache.flink.utils.TimestampHandler.calcolaIndex;
 
@@ -29,7 +28,7 @@ public class QueryDue {
 
     public static void main(String[] args) throws Exception {
 
-        final Integer[] windowCountList = {0,0,0,0,0,0,0,0,0,0,0,0};
+        final Long[] windowCountList = {0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L,0L};
 
         final int daily_Window_size = 24;
         final int weekly_Window_size = 24 * 7;
@@ -71,19 +70,24 @@ public class QueryDue {
             private Long next_fire;
             private Long last_fire;
             private Integer window_dimension = 24*7;
-            private Integer dimension = 86400000;
+            private Integer dimension = 86400000; //un giorno
 
             private Integer last_elem_index = 0;
             private Long ts_first_elem = 0L;
 
             private Integer boolElem;
 
-            private List<Integer> listCount;
+            private List<Long> listCount;
+            private List<Long> tsElemScartati;
 
             @Override
             public TriggerResult onElement(Tuple2<Integer, Long> t, long l, GlobalWindow globalWindow, TriggerContext triggerContext) throws Exception {
+
+
                 long ts = t.f1;
-                int index = calcolaIndex(t.f1*1000);
+                int index = calcolaIndex(t.f1);
+
+                //System.out.println(ts + " - "+ new Date(ts) + " - "+index);
 
                 if(last_fire==null){
                     last_fire = 1514761200000L;
@@ -91,51 +95,78 @@ public class QueryDue {
 
                 if(listCount==null){
                     listCount = new ArrayList<>();
-                    for (int i = 0; i < 12; i++) {
-                        listCount.add(0);
+                    for (int i = 0; i < 13; i++) {
+                        listCount.add(0L);
                     }
+                }
+
+                if(tsElemScartati==null){
+                    tsElemScartati = new ArrayList<>();
                 }
 
                 if(boolElem==null){
                     boolElem=0;
                 }
 
+                /*
+                controllo l'elemento che ha fatto scattare la finestra, (boolElem == 1), e tutti gli elementi
+                da recuperare.
+                nel caso rientri nella finestra, lo processo.
+                altrimenti, trigger fire and purge + salvo anche il dato nuovo.
+                 */
+                if(boolElem == 1){
+
+                    for (int i = 0; i < tsElemScartati.size(); i++) {
+
+                        if(tsElemScartati.get(i) - last_fire < dimension){
+                            int new_index = calcolaIndex(ts_first_elem);
+
+                            listCount.set(new_index, listCount.get(new_index) +1);
+                            tsElemScartati.remove(tsElemScartati.get(i));
+
+                        }else{
+                            //salvo l'ultimo elemento arrivato
+                            tsElemScartati.add(ts);
+
+                            last_fire = last_fire + dimension;
+
+                            for (int j = 0; j < 13 ; j++) {
+                                windowCountList[j] = listCount.get(j);
+                                listCount.set(j,0L);
+                            }
+
+                            return TriggerResult.FIRE_AND_PURGE;
+                        }
+
+                    }
+
+                    boolElem = 0;
+                }
+
                 if(ts - last_fire >= dimension){ //nuovo elemento appartiene alla finestra successiva. lo conservo e faccio la fire&purge.
 
-                    System.out.println("*** diff "+(ts - last_fire));
+                    //System.out.println("*** diff "+(ts - last_fire));
+
+                    listCount.set(0, last_fire);
 
                     last_fire = last_fire + dimension;
                     ts_first_elem = ts;
-                    next_fire = ts + dimension;
+                    //next_fire = ts + dimension;
                     boolElem = 1;
 
+                    //salvo elemento scartato che ha triggerato la finestra
+                    tsElemScartati.add(ts);
 
-                    String res ="";
-                    for (int i = 0; i <12 ; i++) {
-                        res += ", " + listCount.get(i);
-                    }
-
-                    for (int i = 0; i < 12 ; i++) {
+                    for (int i = 0; i < 13 ; i++) {
                         windowCountList[i] = listCount.get(i);
-                        listCount.set(i,0);
+                        listCount.set(i,0L);
                     }
+
                     return TriggerResult.FIRE_AND_PURGE;
 
                 }
 
-                listCount.set(index-1, listCount.get(index-1) +1);
-
-                if(ts_first_elem - last_fire < dimension){
-                    if(boolElem == 1){
-                        //incrementa suo contatore
-                        int new_index = calcolaIndex(ts_first_elem);
-
-                        listCount.set(new_index-1, listCount.get(new_index-1) +1);
-
-                        boolElem=0;
-
-                    }
-                }
+                listCount.set(index, listCount.get(index) +1);
 
                 return TriggerResult.CONTINUE;
             }
@@ -158,9 +189,12 @@ public class QueryDue {
             @Override
             public void apply(GlobalWindow globalWindow, Iterable<Tuple2<Integer, Long>> iterable, Collector<String> collector) throws Exception {
 
-                String res = "";
-                for(Integer numb : windowCountList){
-                    res += ", "+numb;
+
+                String res = ""+new Date(windowCountList[0]);
+
+
+                for (int i = 1; i < 13; i++) {
+                    res += ", "+windowCountList[i];
                 }
 
                 System.out.println(res);
@@ -168,8 +202,7 @@ public class QueryDue {
             }
         });
 
-        result.print().setParallelism(1);
-
+        result.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         env.execute();
     }

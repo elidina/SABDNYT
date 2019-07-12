@@ -72,7 +72,7 @@ public class Main {
                     int waitTime = calcolaDiffTimestamp(actualTimestamp, newTimestamp);
                     //System.out.println("vado in sleep per: " + waitTime);
                     //System.out.println(waitTime * executionTime);
-                    //sleep((long) (waitTime*executionTime));
+                    sleep((long) (waitTime*executionTime));
 
                     app.runProducer(line, i, topic);
                     //System.out.println("invio line n° " + i);

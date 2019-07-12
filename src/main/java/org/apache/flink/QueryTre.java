@@ -29,6 +29,7 @@ import java.util.*;
 
 public class QueryTre {
 
+    //public static void main(String[] args) throws Exception {
     public static void main(String[] args) throws Exception {
 
         final int daily_Window_size = 24;
@@ -46,6 +47,8 @@ public class QueryTre {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
+        //properties.setProperty("bootstrap.servers", "broker:29092");
+        //properties.setProperty("zookeeper.connect", "broker:2181");
         properties.setProperty("group.id", "flink");
 
         JedisPoolFactory.init("localhost", 6379);
@@ -178,14 +181,14 @@ public class QueryTre {
                             result += ", "+ myList.get(i).f0 +", "+myList.get(i).f1;
                         }
 
-                        //System.out.println(result);
+                        System.out.println(result);
 
                         collector.collect(result);
 
                     }
                 });
 
-        resultRanking.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        //resultRanking.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         env.execute();
 
 

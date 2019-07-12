@@ -32,8 +32,6 @@ public class QueryUno {
 
     public static void query1() throws Exception {
 
-     //   final Logger logger  = LoggerFactory.getLogger(QueryUno.class);
-
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
         final int daily_Window_size = 24;
@@ -118,13 +116,6 @@ public class QueryUno {
             }
         });
 
-/*
-        GenericTypeInfo<Object> objectTypeInfo = new GenericTypeInfo<>(Object.class);
-        resultList.transform("DummyLatencySink", objectTypeInfo, new DummyLatencyCountingSink<>(logger))
-                .setParallelism(1).name("Latency Sink")
-                .uid("Latency-Sink");
-                */
-
         //resultList.print().setParallelism(1);
 
         //esultList.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
@@ -181,36 +172,5 @@ public class QueryUno {
         return best;
 
     }
-
-    /*
-
-    public static class DummyLatencyCountingSink<T> extends StreamSink<T> {
-
-        private final Logger logger;
-
-        public DummyLatencyCountingSink(Logger log) {
-            super(new SinkFunction<T>() {
-
-                @Override
-                public void invoke(T value, Context ctx) throws Exception {}
-            });
-            logger = log;
-        }
-
-        @Override
-        public void processLatencyMarker(LatencyMarker latencyMarker) throws Exception {
-
-            Long rn = System.currentTimeMillis();
-            System.out.println("*****");
-            System.out.println(rn - latencyMarker.getMarkedTime());
-            System.out.println("current time:"+ rn+" - latencyMarker: "+ latencyMarker.getMarkedTime());
-            logger.warn("%{}%{}%{}%{}%{}%{}", "latency",
-                    System.currentTimeMillis() - latencyMarker.getMarkedTime(), System.currentTimeMillis(), latencyMarker.getMarkedTime(),
-                    latencyMarker.getSubtaskIndex(), getRuntimeContext().getIndexOfThisSubtask());
-        }
-    }
-
-
-*/
 
 }
