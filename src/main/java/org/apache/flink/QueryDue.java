@@ -37,7 +37,7 @@ public class QueryDue {
         final int weekly_Window_size = 24 * 7;
         final int monthly_Window_size = 24 * 30;
 
-        final int window_dimension = weekly_Window_size;
+        final int window_dimension = daily_Window_size;
 
         String file_path = "query2_output_trigger_" + window_dimension + ".txt";
 
@@ -48,9 +48,9 @@ public class QueryDue {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink2");
+        properties.setProperty("group.id", "flink");
 
-        DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink2", new CommentSchema(), properties))
+        DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(Comment s) {
@@ -71,9 +71,9 @@ public class QueryDue {
         }).windowAll(GlobalWindows.create()).trigger(new Trigger<Tuple2<Integer, Long>, GlobalWindow>() {
 
             private Long last_fire;
-            //private Integer dimension = 86400000;   //un giorno
+            private Integer dimension = 86400000;   //un giorno
             //private Integer dimension = 86400000*7;  //settimana
-            private Long dimension = 2678400000L;  //mese
+            //private Long dimension = 2678400000L;  //mese
 
             private Integer last_elem_index = 0;
             private Long ts_first_elem = 0L;
