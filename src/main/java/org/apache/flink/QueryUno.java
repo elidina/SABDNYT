@@ -1,8 +1,7 @@
 package org.apache.flink;
 
-import org.apache.flink.api.common.functions.FlatMapFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.java.typeutils.GenericTypeInfo;
 import org.apache.flink.core.fs.FileSystem;
 import org.apache.flink.entities.ArticleObject;
 import org.apache.flink.entities.Comment;
@@ -10,17 +9,17 @@ import org.apache.flink.entities.CommentSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
-import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
 import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
-import org.apache.flink.streaming.api.operators.StreamSink;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
-import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.util.Collector;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
+import java.util.Properties;
 
 /**
  * QUERY 1
@@ -30,7 +29,7 @@ import java.util.*;
 public class QueryUno {
 
 
-    public static void query1() throws Exception {
+    public static void main(String[] args) throws Exception {
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -38,28 +37,18 @@ public class QueryUno {
         final int weekly_Window_size = 24*7;
         final int hourly_Window_size = 1;
 
-        final int window_dimension = hourly_Window_size;
+        final int window_dimension = weekly_Window_size;
 
         String file_path = "query1_output_"+window_dimension+".txt";
 
-        //final StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
-
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
-
-        //StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
-      /*  env.setParallelism(8);
-        env.setRestartStrategy(RestartStrategies.noRestart());
-
-        env.setStateBackend(new RocksDBStateBackend("file:///tmp"));
-        */
 
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
         properties.setProperty("group.id", "flink");
 
-        env.getConfig().setLatencyTrackingInterval(10000);
-
+        //stream di input, assegnazione del timestamp
         DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
                     @Override
@@ -69,17 +58,16 @@ public class QueryUno {
                 }).filter(x -> x.userID != 0);
 
 
-        DataStream<ArticleObject> windowCounts = inputStream.flatMap(new FlatMapFunction<Comment, ArticleObject>() {
-                    @Override
-                    public void flatMap(Comment s, Collector<ArticleObject> collector) throws Exception {
-                        //String[] str = s.split(",");
+        //i Commenti sono mappati in oggetti ArticleObject, contenenti l'id dell'articolo e un counter settato ad 1.
+        //gli elementi sono divisi per chiave (articleID) e contati.
+        DataStream<ArticleObject> windowCounts = inputStream.map(new MapFunction<Comment, ArticleObject>() {
+            @Override
+            public ArticleObject map(Comment comment) throws Exception {
+                ArticleObject ao = new ArticleObject(comment.articleID, 1,comment.createDate);
 
-                        ArticleObject ao = new ArticleObject(s.articleID, 1,s.createDate);
-                        //System.out.println(ao);
-                        collector.collect(ao);
-
-                    }
-                }).keyBy("article").timeWindow(Time.hours(window_dimension)).reduce(new ReduceFunction<ArticleObject>() {
+                return ao;
+            }
+        }).keyBy("article").timeWindow(Time.hours(window_dimension)).reduce(new ReduceFunction<ArticleObject>() {
                     @Override
                     public ArticleObject reduce(ArticleObject a1, ArticleObject a2) throws Exception {
                         return new ArticleObject(a1.article, a1.comment + a2.comment, Calendar.getInstance().getTimeInMillis());
@@ -87,6 +75,7 @@ public class QueryUno {
                 });
 
 
+        //gli elementi sono raggruppati e poi viene stilata la classifica
         DataStream<String> resultList = windowCounts.timeWindowAll(Time.hours(window_dimension)).apply(new AllWindowFunction<ArticleObject, String, TimeWindow>() {
             @Override
             public void apply(TimeWindow timeWindow, Iterable<ArticleObject> iterable, Collector<String> collector) throws Exception {
@@ -95,22 +84,20 @@ public class QueryUno {
                     myList.add(t);
                 }
 
-                Collections.sort(myList, new Comparator<ArticleObject>() {
-                    @Override
-                    public int compare(ArticleObject o1, ArticleObject o2) {
+                String result = timeWindow.getStart()+ "";
+                //String result = new Date(timeWindow.getStart())+ "";
 
-                        int first = o1.comment;
-                        int second = o2.comment;
-                        return first - second;
-                    }
-                });
+                int i=0;
+                while(myList.size() > 0 && i < 3){
 
-
-                String result = new Date(timeWindow.getStart())+ "";
-                for (int i = 0; i < 3; i++) {
-                    result += ", "+ myList.get(i).article + ", "+myList.get(i).comment;
+                    ArticleObject ao = getMaxArticle(myList);
+                    result += ", "+ao.article+", "+ao.comment;
+                    myList.remove(ao);
+                    i++;
 
                 }
+
+                //System.out.println(result);
 
                 collector.collect(result);
             }
@@ -118,15 +105,16 @@ public class QueryUno {
 
         //resultList.print().setParallelism(1);
 
-        //esultList.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        resultList.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         env.execute("Query1");
     }
 
+
     private static ArticleObject getMaxArticle(List<ArticleObject> myList) {
 
-        ArticleObject maxArticle = null;
-        Integer max = 0;
+        ArticleObject maxArticle = myList.get(0);
+        Integer max = myList.get(0).comment;
 
         for (ArticleObject t : myList) {
             if(t.comment > max){
@@ -139,38 +127,5 @@ public class QueryUno {
 
     }
 
-
-    public static List<ArticleObject> getTop3Articles(List<ArticleObject> resultList){
-
-        ArticleObject firstArticle = getNextTop(resultList);
-        resultList.remove(firstArticle);
-        ArticleObject secondArticle = getNextTop(resultList);
-        resultList.remove(secondArticle);
-        ArticleObject thirdArticle = getNextTop(resultList);
-        resultList.remove(thirdArticle);
-
-        List<ArticleObject> top3List = new ArrayList<>();
-        top3List.add(firstArticle);
-        top3List.add(secondArticle);
-        top3List.add(thirdArticle);
-
-        return top3List;
-    }
-
-    public static ArticleObject getNextTop(List<ArticleObject> list){
-
-        int max =0;
-        ArticleObject best = null;
-
-        for(ArticleObject ac : list){
-            if(ac.comment > max){
-                best = ac;
-                max = best.comment;
-            }
-        }
-
-        return best;
-
-    }
 
 }

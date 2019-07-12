@@ -37,7 +37,6 @@ public class MapFunctionDepth3 implements FlatMapFunction <Comment, Tuple2<Strin
                 Tuple2<String, Double> t2 = new Tuple2<>(values[1],1*0.7);
                 collector.collect(t2);
             }
-            System.out.println("*");
 
         }catch(Exception e){
             System.err.println("Error depth 3: commento genitore non trovato! CommentID: "+ comment.commentID);

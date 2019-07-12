@@ -29,7 +29,6 @@ import java.util.*;
 
 public class QueryTre {
 
-    //public static void main(String[] args) throws Exception {
     public static void main(String[] args) throws Exception {
 
         final int daily_Window_size = 24;
@@ -82,7 +81,8 @@ public class QueryTre {
         }).addSink( new RedisSink<>(conf, new RedisDepthOne()));
 
         /**
-         * depth1
+         * commenti depth1
+         * conteggio dei like
          * output: (autore, likes)
          * estraggo i like per ciascun commento
          */
@@ -94,7 +94,7 @@ public class QueryTre {
                         String author = Integer.toString(comment.userID);
                         Double likes = new Double(comment.recommendations);
                         if(comment.editorsSelection){
-                            int increment = (int) (likes*0.1);
+                            double increment = likes*0.1;
                             likes += increment;
                         }
 
@@ -103,7 +103,7 @@ public class QueryTre {
                 }).keyBy(0).timeWindow(Time.hours(window_dimension)).sum(1);
 
         /**
-         * DEPTH 2
+         * commenti DEPTH 2
          * output: tuple(id commento padre, id user padre, id user nonno
          * tuple pronte per essere salvate su redis
          */
@@ -116,7 +116,7 @@ public class QueryTre {
 
         /**
          * output: tuple(autore,count comm)
-         * calcola le tuple autore/count per i commenti di depth 2
+         * conteggio dei commenti per le tuple autore/count a partire dai commenti di depth 2
          */
         DataStream<Tuple2<String,Double>> commCountDepthTwo = twoStream.map(new MapFunction<Tuple3<String, String, String>, Tuple2<String, Double>>() {
             @Override
@@ -126,9 +126,9 @@ public class QueryTre {
         }).keyBy(0).timeWindow(Time.hours(window_dimension)).sum(1);
 
         /**
-         * DEPTH 3
+         * commenti DEPTH 3
          * output: tuple(autore,count comm)
-         * calcola le tuple autore/count per i commenti di depth 3
+         * conteggio dei commenti per le tuple autore/count a partire dai commenti di depth 3
          */
         DataStream<Tuple2<String, Double>> commCountDepthThree = inputStream.filter(x -> x.depth == 3)
                 .flatMap(new MapFunctionDepth3())
@@ -139,18 +139,18 @@ public class QueryTre {
 
         /**
          * output: tuple(autore/count comm totale * peso)
+         * union degli stream riguardanti i count dei commenti
          * valori finali per i commenti
          */
         DataStream<Tuple2<String, Double>> joinDepthTwoThree = commCountDepthTwo.union(commCountDepthThree)
-                .keyBy(0)
+                .keyBy(0).timeWindow(Time.hours(window_dimension))
                 .sum(1);
         /**
          * output: tuple(autore/rank)
-         * somma dei rank per commenti e like per ciascun user
+         * union e somma dei rank per commenti e like per ciascun user
          */
         DataStream<Tuple2<String, Double>> windowResults = directCommentsLikes.union(joinDepthTwoThree)
-                .keyBy(0).sum(1);
-
+                .keyBy(0).timeWindow(Time.hours(window_dimension)).sum(1);
 
         /**
          * ranking
@@ -166,31 +166,45 @@ public class QueryTre {
                             myList.add(t);
                         }
 
-                        Collections.sort(myList, new Comparator<Tuple2<String, Double>>() {
-                            @Override
-                            public int compare(Tuple2<String, Double> o1, Tuple2<String, Double> o2) {
-                                int first = (int) (o1.f1 * 1000);
-                                int second = (int) (o2.f1 * 1000);
-                                return first - second;
-                            }
-                        });
+                        //String result = "" + new Date(timeWindow.getStart()) +"";
+                        String result = "" + timeWindow.getStart() +"";
 
-                        String result = "" + new Date(timeWindow.getStart()) +"";
+                        int i=0;
+                        while(myList.size() > 0 && i < 10){
 
-                        for (int i = 0; i < 10 && i < myList.size(); i++) {
-                            result += ", "+ myList.get(i).f0 +", "+myList.get(i).f1;
+                            Tuple2<String, Double> t = getMaxTuple(myList);
+                            result += ", "+t.f0+", "+t.f1;
+                            myList.remove(t);
+                            i++;
+
                         }
 
-                        System.out.println(result);
+                        //System.out.println(result);
 
                         collector.collect(result);
 
                     }
                 });
 
-        //resultRanking.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        resultRanking.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
         env.execute();
 
+
+    }
+
+    private static Tuple2<String, Double> getMaxTuple(List<Tuple2<String, Double>> myList) {
+
+        Tuple2<String, Double> maxTuple = myList.get(0);
+        double max = myList.get(0).f1;
+
+        for (Tuple2<String, Double> t : myList) {
+            if(t.f1 > max){
+                max = t.f1;
+                maxTuple = t;
+            }
+        }
+
+        return maxTuple;
 
     }
 

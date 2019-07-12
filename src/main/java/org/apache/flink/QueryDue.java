@@ -22,9 +22,12 @@ import java.util.*;
 
 import static org.apache.flink.utils.TimestampHandler.calcolaIndex;
 
+/**
+ * Implementazione della Query Due utilizzando un trigger custom su un'unica finestra.
+ * Nella finestra vengono incremententi i counter per ciascuna fascia oraria, fino allo scatto della finestra.
+ */
+
 public class QueryDue {
-
-
 
     public static void main(String[] args) throws Exception {
 
@@ -34,9 +37,9 @@ public class QueryDue {
         final int weekly_Window_size = 24 * 7;
         final int monthly_Window_size = 24 * 30;
 
-        final int window_dimension = daily_Window_size;
+        final int window_dimension = weekly_Window_size;
 
-        String file_path = "query2_output_" + window_dimension + ".txt";
+        String file_path = "query2_output_trigger_" + window_dimension + ".txt";
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -45,9 +48,9 @@ public class QueryDue {
         Properties properties = new Properties();
         properties.setProperty("bootstrap.servers", "localhost:9092");
         properties.setProperty("zookeeper.connect", "localhost:2181");
-        properties.setProperty("group.id", "flink");
+        properties.setProperty("group.id", "flink2");
 
-        DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
+        DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink2", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
                     @Override
                     public long extractTimestamp(Comment s) {
@@ -67,10 +70,10 @@ public class QueryDue {
             }
         }).windowAll(GlobalWindows.create()).trigger(new Trigger<Tuple2<Integer, Long>, GlobalWindow>() {
 
-            private Long next_fire;
             private Long last_fire;
-            private Integer window_dimension = 24*7;
-            private Integer dimension = 86400000; //un giorno
+            //private Integer dimension = 86400000;   //un giorno
+            //private Integer dimension = 86400000*7;  //settimana
+            private Long dimension = 2678400000L;  //mese
 
             private Integer last_elem_index = 0;
             private Long ts_first_elem = 0L;
@@ -82,7 +85,6 @@ public class QueryDue {
 
             @Override
             public TriggerResult onElement(Tuple2<Integer, Long> t, long l, GlobalWindow globalWindow, TriggerContext triggerContext) throws Exception {
-
 
                 long ts = t.f1;
                 int index = calcolaIndex(t.f1);
@@ -109,10 +111,10 @@ public class QueryDue {
                 }
 
                 /*
-                controllo l'elemento che ha fatto scattare la finestra, (boolElem == 1), e tutti gli elementi
-                da recuperare.
-                nel caso rientri nella finestra, lo processo.
-                altrimenti, trigger fire and purge + salvo anche il dato nuovo.
+                Controllo l'elemento che ha fatto scattare la finestra precedente, (boolElem == 1), e tutti gli altri elementi
+                da recuperare da scatti precedenti.
+                Nel caso l'elemento rientri nella finestra corrente, lo processo.
+                altrimenti, scatta trigger fire and purge (e salvo il dato arrivato  nel frattempo).
                  */
                 if(boolElem == 1){
 
@@ -143,7 +145,7 @@ public class QueryDue {
                     boolElem = 0;
                 }
 
-                if(ts - last_fire >= dimension){ //nuovo elemento appartiene alla finestra successiva. lo conservo e faccio la fire&purge.
+                if(ts - last_fire >= dimension){ //nuovo elemento appartiene alla finestra successiva. lo conservo e scatta il trigger la fire&purge.
 
                     //System.out.println("*** diff "+(ts - last_fire));
 
@@ -154,9 +156,10 @@ public class QueryDue {
                     //next_fire = ts + dimension;
                     boolElem = 1;
 
-                    //salvo elemento scartato che ha triggerato la finestra
+                    //salvo elemento scartato che ha fatto scattare la finestra
                     tsElemScartati.add(ts);
 
+                    //svuoto la lista locale e sposto i risultati nella variabile globale
                     for (int i = 0; i < 13 ; i++) {
                         windowCountList[i] = listCount.get(i);
                         listCount.set(i,0L);
@@ -166,6 +169,7 @@ public class QueryDue {
 
                 }
 
+                //incremento counter realativo all'ultimo elemento entrato nella finestra
                 listCount.set(index, listCount.get(index) +1);
 
                 return TriggerResult.CONTINUE;
@@ -190,8 +194,9 @@ public class QueryDue {
             public void apply(GlobalWindow globalWindow, Iterable<Tuple2<Integer, Long>> iterable, Collector<String> collector) throws Exception {
 
 
-                String res = ""+new Date(windowCountList[0]);
+                //String res = ""+new Date(windowCountList[0]);
 
+                String res = ""+windowCountList[0];
 
                 for (int i = 1; i < 13; i++) {
                     res += ", "+windowCountList[i];
