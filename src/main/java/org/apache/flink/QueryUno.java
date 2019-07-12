@@ -37,7 +37,7 @@ public class QueryUno {
         final int weekly_Window_size = 24*7;
         final int hourly_Window_size = 1;
 
-        final int window_dimension = weekly_Window_size;
+        final int window_dimension = hourly_Window_size;
 
         String file_path = "query1_output_"+window_dimension+".txt";
 

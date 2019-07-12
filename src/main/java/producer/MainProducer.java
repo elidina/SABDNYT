@@ -1,3 +1,5 @@
+package producer;
+
 import producer.App;
 
 import java.io.BufferedReader;
@@ -12,8 +14,19 @@ import java.util.*;
 import static java.lang.System.exit;
 import static java.lang.Thread.sleep;
 
+/**
+ * La classe "Producer" si occupa della pubblicazione dello stream attraverso un Kafka producer, utilizzando
+ * il topic "flink".
+ */
 
-public class Main {
+/*
+    I timestamp del primo e ultimo commento ci danno rispettivamente:
+    dd MM yyyy HH:mm:ss
+    - 01/01/2018 00:47:41
+    - 18/04/2018 21:09:41
+*/
+
+public class MainProducer {
 
     /**
      * L'invio della line avviene dopo aver attesto il tempo tra il timestamp precedente e quello attuale
@@ -23,9 +36,9 @@ public class Main {
 
         App app = new App();
 
-        String topic = "flink";
+        String topic = "flink3";
 
-        //todo prendere dataset dall'esterno del programma
+        //caricare dataset nella cartella
         String csvPath = "dataset/Comments_jan-apr2018.csv";
 
         BufferedReader br = null;
@@ -33,17 +46,6 @@ public class Main {
         int i = 0;
         Long actualTimestamp = 0L;
 
-        /*
-        Il convertitore ci da rispettivamente per 1° e ultimo timestamp di creazione:
-        dd MM yyyy HH:mm:ss
-        - 01/01/2018 01:47:41
-        - 03/01/2018 06:15:49
-        La differenza è di 2 giorni, 5 ore, 28 min, 8 sec /
-
-        Fissando un tempo di esecuzione di 10 min si ottiene che 1 sec va simulato in 3 ms.
-         */
-
-        //todo correggere
         //double executionTime = calcolaDurataEsecuzione(csvPath);
         //System.out.println("execution time: " + executionTime);
         double executionTime = 0.003;
@@ -57,6 +59,7 @@ public class Main {
                 //salto la 1^ riga di String
                 if(i>0) {
 
+                    //da commentare per inviare intero file
                     if(i==1500)
                         exit(0);
 
@@ -97,7 +100,13 @@ public class Main {
         }
     }
 
-
+    /**
+     * Il metodo calcola la durata dell'esecuzione leggendo primo e ultimo timestamp dal file csv.
+     * @param csvPath
+     * @return
+     * @throws IOException
+     * @throws ParseException
+     */
     private static double calcolaDurataEsecuzione(String csvPath) throws IOException, ParseException {
 
         BufferedReader br;
@@ -157,11 +166,7 @@ public class Main {
 
 
     /**
-     * Elimino tutti i campi finale della line. Il campo intermedio vuoto per "comment" e utile per "userReply".
-     * todo lo sostituisco con "null"/0 nel comment
-     * I campi di "userDisplayName" e "userLocation" vengono aggregati se separati in + campi.
-     * @param line
-     * @return
+     * funzione per pulire il csv, utilizzata solo in test iniziali per calcolare i tempi d'invio
      */
     public static String lineFilter(String line, int index) {
         //System.out.println("index: " + index);
@@ -213,7 +218,11 @@ public class Main {
         return joinedString;
     }
 
-
+    /**
+     * Questo metodo valuta se una stringa passata come parametro è un valore numerico o no.
+     * @param word
+     * @return
+     */
     public static boolean isNumeric(String word) {
         try {
             int i = Integer.parseInt(word);
@@ -223,7 +232,12 @@ public class Main {
         return true;
     }
 
-
+    /**
+     * Il metodo riceve una line dal file e ne estrae il timestamp, quindi lo restituisce in uscita.
+     * @param line
+     * @return
+     * @throws ParseException
+     */
     public static Long getTimestamp(String line) throws ParseException {
         //System.out.println(line);
 

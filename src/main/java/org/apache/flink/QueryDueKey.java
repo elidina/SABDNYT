@@ -26,8 +26,11 @@ import static org.apache.flink.utils.TimestampHandler.calcolaIndex;
 import static org.apache.flink.utils.TimestampHandler.estraiGiorno;
 
 /**
- * Query 2 implementata utilizzando un'unica finestra tumbling Flink
- * i dati in entrata sono separati per chiave (fascia oraria) ed aggregati.
+ * Implementazione della Query 2 senza custom window.
+ * Ad ogni commento è stato assegnato un indice in base alla fascia oraria di appartenenza.
+ * Lo stream è stato suddiviso in base alla key e la somma richiesta è stata calcolata con una reduce().
+ * Con una timewindow abbiamo calcolato i risultati nelle varie finestre temporali (un giorno, una settimana, un mese) e il risultato ottenuto è stato
+ * scritto su un file di output.
  */
 
 public class QueryDueKey {
