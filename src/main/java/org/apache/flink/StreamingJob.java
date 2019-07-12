@@ -37,7 +37,7 @@ public class StreamingJob {
 
 	public static void main(String[] args) throws Exception {
 
-		//QueryUno.query1();
+		QueryUno.query1();
 		//QueryTre.query3();
 
 	}

@@ -21,8 +21,6 @@ import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.util.Collector;
 
 import java.util.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * QUERY 1
@@ -32,9 +30,9 @@ import org.slf4j.LoggerFactory;
 public class QueryUno {
 
 
-    public static void main(String[] args) throws Exception {
+    public static void query1() throws Exception {
 
-        final Logger logger  = LoggerFactory.getLogger(QueryUno.class);
+     //   final Logger logger  = LoggerFactory.getLogger(QueryUno.class);
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -120,15 +118,16 @@ public class QueryUno {
             }
         });
 
-
+/*
         GenericTypeInfo<Object> objectTypeInfo = new GenericTypeInfo<>(Object.class);
         resultList.transform("DummyLatencySink", objectTypeInfo, new DummyLatencyCountingSink<>(logger))
                 .setParallelism(1).name("Latency Sink")
                 .uid("Latency-Sink");
+                */
 
         //resultList.print().setParallelism(1);
 
-        resultList.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
+        //esultList.writeAsText(file_path, FileSystem.WriteMode.OVERWRITE).setParallelism(1);
 
         env.execute("Query1");
     }
@@ -183,6 +182,8 @@ public class QueryUno {
 
     }
 
+    /*
+
     public static class DummyLatencyCountingSink<T> extends StreamSink<T> {
 
         private final Logger logger;
@@ -210,6 +211,6 @@ public class QueryUno {
     }
 
 
-
+*/
 
 }
