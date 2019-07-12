@@ -1,4 +1,4 @@
-package org.apache.flink;
+package org.apache.flink.entities;
 
 import org.apache.flink.api.common.serialization.DeserializationSchema;
 import org.apache.flink.api.common.serialization.SerializationSchema;

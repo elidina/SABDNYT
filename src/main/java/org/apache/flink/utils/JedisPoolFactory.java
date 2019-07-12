@@ -1,4 +1,4 @@
-package org.apache.flink;
+package org.apache.flink.utils;
 
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;

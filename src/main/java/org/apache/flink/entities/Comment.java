@@ -1,4 +1,4 @@
-package org.apache.flink;
+package org.apache.flink.entities;
 
 import java.util.Arrays;
 
@@ -20,6 +20,7 @@ public class Comment {
     public int userID;
     public String userLocation;
     public String error;
+    public long arrivalTime;
 
     public Comment(){
 
@@ -27,6 +28,8 @@ public class Comment {
 
     public static Comment fromString(String s){
         Comment cl = new Comment();
+        cl.arrivalTime = System.currentTimeMillis();
+        //System.out.println("****" + cl.arrivalTime);
 
         if(s.contains("https:") || s.contains("http:")){
             cl.error = "http";

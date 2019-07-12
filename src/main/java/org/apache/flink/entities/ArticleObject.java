@@ -1,4 +1,4 @@
-package org.apache.flink;
+package org.apache.flink.entities;
 
 import java.io.Serializable;
 

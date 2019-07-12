@@ -1,33 +1,40 @@
 package org.apache.flink;
 
 import org.apache.flink.api.common.functions.FlatMapFunction;
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.functions.ReduceFunction;
-import org.apache.flink.api.java.tuple.Tuple;
-import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.api.java.typeutils.GenericTypeInfo;
 import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.entities.ArticleObject;
+import org.apache.flink.entities.Comment;
+import org.apache.flink.entities.CommentSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
+import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor;
-import org.apache.flink.streaming.api.functions.windowing.WindowFunction;
+import org.apache.flink.streaming.api.functions.windowing.AllWindowFunction;
+import org.apache.flink.streaming.api.operators.StreamSink;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.streaming.api.windowing.windows.TimeWindow;
 import org.apache.flink.streaming.connectors.kafka.FlinkKafkaConsumer;
+import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
 import org.apache.flink.util.Collector;
 
 import java.util.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * QUERY 1
  */
-
 //TODO: gestione stato backend / finestre temporali diverse / importo dati kafkaconsumer
 
 public class QueryUno {
 
 
-    public static void query1() throws Exception {
+    public static void main(String[] args) throws Exception {
+
+        final Logger logger  = LoggerFactory.getLogger(QueryUno.class);
 
         final StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
 
@@ -43,7 +50,6 @@ public class QueryUno {
 
         env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime);
 
-
         //StreamExecutionEnvironment env = StreamExecutionEnvironment.createLocalEnvironment();
       /*  env.setParallelism(8);
         env.setRestartStrategy(RestartStrategies.noRestart());
@@ -56,7 +62,7 @@ public class QueryUno {
         properties.setProperty("zookeeper.connect", "localhost:2181");
         properties.setProperty("group.id", "flink");
 
-        env.getConfig().setLatencyTrackingInterval(2000);
+        env.getConfig().setLatencyTrackingInterval(10000);
 
         DataStream<Comment> inputStream = env.addSource(new FlinkKafkaConsumer<>("flink", new CommentSchema(), properties))
                 .assignTimestampsAndWatermarks(new BoundedOutOfOrdernessTimestampExtractor<Comment>(Time.seconds(1)) {
@@ -73,7 +79,7 @@ public class QueryUno {
                         //String[] str = s.split(",");
 
                         ArticleObject ao = new ArticleObject(s.articleID, 1,s.createDate);
-                        System.out.println(ao);
+                        //System.out.println(ao);
                         collector.collect(ao);
 
                     }
@@ -84,35 +90,41 @@ public class QueryUno {
                     }
                 });
 
-        DataStream<String> resultList = windowCounts.map(new MapFunction<ArticleObject, Tuple2<String, ArticleObject>>() {
+
+        DataStream<String> resultList = windowCounts.timeWindowAll(Time.hours(window_dimension)).apply(new AllWindowFunction<ArticleObject, String, TimeWindow>() {
             @Override
-            public Tuple2<String, ArticleObject> map(ArticleObject articleObject) throws Exception {
-                return new Tuple2<>("label", articleObject);
-            }
-        }).keyBy(0).timeWindow(Time.hours(window_dimension)).apply(new WindowFunction<Tuple2<String, ArticleObject>, String, Tuple, TimeWindow>() {
-            @Override
-            public void apply(Tuple tuple, TimeWindow timeWindow, Iterable<Tuple2<String, ArticleObject>> iterable, Collector<String> collector) throws Exception {
+            public void apply(TimeWindow timeWindow, Iterable<ArticleObject> iterable, Collector<String> collector) throws Exception {
                 List<ArticleObject> myList = new ArrayList<>();
-                for(Tuple2<String, ArticleObject> t : iterable){
-                    myList.add(t.f1);
+                for(ArticleObject t : iterable){
+                    myList.add(t);
                 }
 
-                Long time = timeWindow.getStart();
-                String finalRes = new Date(time)+"";
+                Collections.sort(myList, new Comparator<ArticleObject>() {
+                    @Override
+                    public int compare(ArticleObject o1, ArticleObject o2) {
 
-                for (int i = 0; i < 3 && i < myList.size() ; i++) {
-                    finalRes = finalRes + ", ";
-                    ArticleObject ao = getMaxArticle(myList);
-                    myList.remove(ao);
-                    finalRes = finalRes + ao.article + ", "+ao.comment;
+                        int first = o1.comment;
+                        int second = o2.comment;
+                        return first - second;
+                    }
+                });
+
+
+                String result = new Date(timeWindow.getStart())+ "";
+                for (int i = 0; i < 3; i++) {
+                    result += ", "+ myList.get(i).article + ", "+myList.get(i).comment;
+
                 }
 
-                System.out.println(finalRes);
-
-                collector.collect(finalRes);
-
+                collector.collect(result);
             }
         });
+
+
+        GenericTypeInfo<Object> objectTypeInfo = new GenericTypeInfo<>(Object.class);
+        resultList.transform("DummyLatencySink", objectTypeInfo, new DummyLatencyCountingSink<>(logger))
+                .setParallelism(1).name("Latency Sink")
+                .uid("Latency-Sink");
 
         //resultList.print().setParallelism(1);
 
@@ -169,6 +181,32 @@ public class QueryUno {
 
         return best;
 
+    }
+
+    public static class DummyLatencyCountingSink<T> extends StreamSink<T> {
+
+        private final Logger logger;
+
+        public DummyLatencyCountingSink(Logger log) {
+            super(new SinkFunction<T>() {
+
+                @Override
+                public void invoke(T value, Context ctx) throws Exception {}
+            });
+            logger = log;
+        }
+
+        @Override
+        public void processLatencyMarker(LatencyMarker latencyMarker) throws Exception {
+
+            Long rn = System.currentTimeMillis();
+            System.out.println("*****");
+            System.out.println(rn - latencyMarker.getMarkedTime());
+            System.out.println("current time:"+ rn+" - latencyMarker: "+ latencyMarker.getMarkedTime());
+            logger.warn("%{}%{}%{}%{}%{}%{}", "latency",
+                    System.currentTimeMillis() - latencyMarker.getMarkedTime(), System.currentTimeMillis(), latencyMarker.getMarkedTime(),
+                    latencyMarker.getSubtaskIndex(), getRuntimeContext().getIndexOfThisSubtask());
+        }
     }
 
 

@@ -1,5 +1,6 @@
-package org.apache.flink;
+package org.apache.flink.utils;
 
+import org.apache.flink.entities.Comment;
 import org.apache.flink.api.common.functions.FlatMapFunction;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.util.Collector;

@@ -1,8 +1,9 @@
 package org.apache.flink;
 
-import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
+import org.apache.flink.entities.Comment;
+import org.apache.flink.entities.CommentSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;

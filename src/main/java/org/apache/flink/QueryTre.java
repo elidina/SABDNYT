@@ -4,6 +4,8 @@ import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.core.fs.FileSystem;
+import org.apache.flink.entities.Comment;
+import org.apache.flink.entities.CommentSchema;
 import org.apache.flink.streaming.api.TimeCharacteristic;
 import org.apache.flink.streaming.api.datastream.DataStream;
 import org.apache.flink.streaming.api.datastream.DataStreamSink;
@@ -19,6 +21,9 @@ import org.apache.flink.streaming.connectors.redis.common.mapper.RedisCommandDes
 import org.apache.flink.streaming.connectors.redis.common.mapper.RedisMapper;
 import org.apache.flink.streaming.api.windowing.time.Time;
 import org.apache.flink.util.Collector;
+import org.apache.flink.utils.JedisPoolFactory;
+import org.apache.flink.utils.MapFunctionDepth2;
+import org.apache.flink.utils.MapFunctionDepth3;
 
 import java.util.*;
 
