@@ -25,6 +25,11 @@ import java.util.TimeZone;
 import static org.apache.flink.utils.TimestampHandler.calcolaIndex;
 import static org.apache.flink.utils.TimestampHandler.estraiGiorno;
 
+/**
+ * Query 2 implementata utilizzando un'unica finestra tumbling Flink
+ * i dati in entrata sono separati per chiave (fascia oraria) ed aggregati.
+ */
+
 public class QueryDueKey {
 
     public static void main(String[] args) throws Exception {
