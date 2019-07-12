@@ -97,7 +97,7 @@ public class QueryUno {
 
                 }
 
-                //System.out.println(result);
+                System.out.println(result);
 
                 collector.collect(result);
             }

@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.*;
 
 import static java.lang.System.exit;
+import static java.lang.System.setOut;
 import static java.lang.Thread.sleep;
 
 /**
@@ -36,7 +37,7 @@ public class MainProducer {
 
         App app = new App();
 
-        String topic = "flink3";
+        String topic = "flink";
 
         //caricare dataset nella cartella
         String csvPath = "dataset/Comments_jan-apr2018.csv";
@@ -60,7 +61,7 @@ public class MainProducer {
                 if(i>0) {
 
                     //da commentare per inviare intero file
-                    if(i==1500)
+                    if(i==10000)
                         exit(0);
 
 
@@ -81,6 +82,7 @@ public class MainProducer {
                     //System.out.println("invio line n° " + i);
 
                     actualTimestamp = newTimestamp;
+                    System.out.println(i);
                 }
                 i++;
             }
